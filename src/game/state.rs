@@ -79,7 +79,7 @@ impl State {
                 ) {
                     (Response::Err(error), None)
                 } else {
-                    if let Ok(Status::WaitingForBid(_)) =
+                    if let Status::WaitingForBid(_) =
                         self.public_state.get_status()
                     {
                         // start of new round
@@ -100,9 +100,9 @@ impl State {
         }
     }
 
-    /// Gets if this game is over or not.
-    pub fn is_game_over(&self) -> Result<bool, String> {
-        Ok(self.public_state.get_status()? == Status::GameOver)
+    /// Gets the status of the game.
+    pub fn get_status(&self) -> Status {
+        self.public_state.get_status()
     }
 
     /// Creates a player's view of the game.

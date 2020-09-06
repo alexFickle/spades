@@ -74,7 +74,7 @@ impl View {
     }
 
     /// Gets the status of this game.
-    pub fn get_status(&self) -> Result<Status, String> {
+    pub fn get_status(&self) -> Status {
         self.public_state.get_status()
     }
 

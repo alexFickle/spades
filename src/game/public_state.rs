@@ -82,29 +82,26 @@ impl PublicState {
     }
 
     /// Gets the current status of this game.
-    pub fn get_status(&self) -> Result<Status, String> {
+    pub fn get_status(&self) -> Status {
         if scoring::get_winning_team_index(self.get_scores()).is_some() {
-            return Ok(Status::GameOver);
+            return Status::GameOver;
         }
 
         if let Some(bidding_nil) = self.pending_nil_player {
-            return Ok(Status::WaitingForNilConfirmation(
-                bidding_nil.teammate(),
-            ));
+            return Status::WaitingForNilConfirmation(bidding_nil.teammate());
         }
 
         for player in self.dealer.next().iter() {
             if self.bids[player].is_none() {
-                return Ok(Status::WaitingForBid(player));
+                return Status::WaitingForBid(player);
             }
         }
 
         match self.trick.get_status() {
-            trick::Status::Waiting(player) => {
-                Ok(Status::WaitingForPlay(player))
+            trick::Status::Waiting(player) => Status::WaitingForPlay(player),
+            _ => {
+                panic!("Reached unreachable code in PublicState::get_status()")
             }
-            _ => Err("Reached unreachable code in PublicState::get_status()"
-                .to_string()),
         }
     }
 
@@ -168,7 +165,7 @@ impl PublicState {
         if !hand.contains(card) {
             return Err("You can not play a card not in your hand.".to_string());
         };
-        match self.get_status()? {
+        match self.get_status() {
             Status::WaitingForBid(_) | Status::WaitingForNilConfirmation(_) => {
                 Err("Can not play a card, bidding is not complete.".to_string())
             }
@@ -198,7 +195,7 @@ impl PublicState {
         player: Player,
         card: Card,
     ) -> Result<(), String> {
-        match self.get_status()? {
+        match self.get_status() {
             Status::WaitingForBid(_) | Status::WaitingForNilConfirmation(_) => {
                 Err("Can not play a card, bidding is not complete.".to_string())
             }
@@ -214,7 +211,7 @@ impl PublicState {
 
     /// Handles a player making their bid.
     pub fn on_bid(&mut self, player: Player, bid: Bid) -> Result<(), String> {
-        if self.get_status()? != Status::WaitingForBid(player) {
+        if self.get_status() != Status::WaitingForBid(player) {
             return Err("It is not your turn to bid.".to_string());
         }
         if bid == Bid::BlindNil && self.seen_cards[player] {
@@ -294,10 +291,7 @@ mod test {
         let mut state = PublicState::default();
         for player in Player::Two.iter() {
             state.on_cards_seen(player);
-            assert_eq!(
-                state.get_status().unwrap(),
-                Status::WaitingForBid(player)
-            );
+            assert_eq!(state.get_status(), Status::WaitingForBid(player));
             assert_eq!(state.get_bid(player), None);
             state.on_bid(player, Bid::Take(player.to_index())).unwrap();
             assert_eq!(
@@ -317,25 +311,19 @@ mod test {
 
         // player 4 denies
         assert_eq!(
-            state.get_status().unwrap(),
+            state.get_status(),
             Status::WaitingForNilConfirmation(Player::Four)
         );
         state.on_cards_seen(Player::Four);
         state.on_nil_approval(Player::Four, false).unwrap();
 
         // player 2 bids nil again
-        assert_eq!(
-            state.get_status().unwrap(),
-            Status::WaitingForBid(Player::Two)
-        );
+        assert_eq!(state.get_status(), Status::WaitingForBid(Player::Two));
         state.on_bid(Player::Two, Bid::Nil).unwrap();
 
         // player 4 accepts it
         state.on_nil_approval(Player::Four, true).unwrap();
-        assert_eq!(
-            state.get_status().unwrap(),
-            Status::WaitingForBid(Player::Three)
-        );
+        assert_eq!(state.get_status(), Status::WaitingForBid(Player::Three));
     }
 
     #[test]
@@ -346,10 +334,7 @@ mod test {
         state.on_bid(Player::Two, Bid::BlindNil).unwrap();
 
         // player 3 fails to bid blind nil do to already seeing their cards
-        assert_eq!(
-            state.get_status().unwrap(),
-            Status::WaitingForBid(Player::Three)
-        );
+        assert_eq!(state.get_status(), Status::WaitingForBid(Player::Three));
         state.on_cards_seen(Player::Three);
         assert!(state.on_bid(Player::Three, Bid::BlindNil).is_err());
     }
@@ -392,10 +377,7 @@ mod test {
         }
 
         {
-            assert_eq!(
-                Status::WaitingForPlay(Player::Two),
-                state.get_status().unwrap()
-            );
+            assert_eq!(Status::WaitingForPlay(Player::Two), state.get_status());
             let mut hand = card::Set::suite(card::Suite::Diamond);
             let card = Card::new(card::Suite::Diamond, card::Value::Ace);
             state.on_card_played(Player::Two, card, &mut hand).unwrap();
@@ -406,7 +388,7 @@ mod test {
         {
             assert_eq!(
                 Status::WaitingForPlay(Player::Three),
-                state.get_status().unwrap()
+                state.get_status()
             );
             let mut hand = card::Set::suite(card::Suite::Heart);
             let card = Card::new(card::Suite::Heart, card::Value::Number(4));
@@ -420,7 +402,7 @@ mod test {
         {
             assert_eq!(
                 Status::WaitingForPlay(Player::Four),
-                state.get_status().unwrap()
+                state.get_status()
             );
             let mut hand = card::Set::suite(card::Suite::Spade);
             let card = Card::new(card::Suite::Spade, card::Value::Number(2));
@@ -430,10 +412,7 @@ mod test {
         }
 
         {
-            assert_eq!(
-                Status::WaitingForPlay(Player::One),
-                state.get_status().unwrap()
-            );
+            assert_eq!(Status::WaitingForPlay(Player::One), state.get_status());
             let mut hand = card::Set::suite(card::Suite::Club);
             let card = Card::new(card::Suite::Club, card::Value::Number(7));
             state.on_card_played(Player::One, card, &mut hand).unwrap();
@@ -444,10 +423,7 @@ mod test {
         // player four should have won
         assert_eq!(1, state.get_num_tricks(Player::Four));
         // and therefore they are next to play
-        assert_eq!(
-            Status::WaitingForPlay(Player::Four),
-            state.get_status().unwrap()
-        );
+        assert_eq!(Status::WaitingForPlay(Player::Four), state.get_status());
         // no other players should have any tricks taken
         for player in Player::Four.iter().skip(1) {
             assert_eq!(0, state.get_num_tricks(player));
@@ -494,10 +470,7 @@ mod test {
         // player three should have won
         assert_eq!(1, state.get_num_tricks(Player::Three));
         // and therefore is next to play
-        assert_eq!(
-            Status::WaitingForPlay(Player::Three),
-            state.get_status().unwrap()
-        );
+        assert_eq!(Status::WaitingForPlay(Player::Three), state.get_status());
         // no other players should have any tricks taken
         for player in Player::Three.iter().skip(1) {
             assert_eq!(0, state.get_num_tricks(player));
@@ -538,10 +511,7 @@ mod test {
         assert_eq!(1, state.get_round_results().len());
 
         // now player two is the dealer, so player three bids next
-        assert_eq!(
-            Status::WaitingForBid(Player::Three),
-            state.get_status().unwrap()
-        );
+        assert_eq!(Status::WaitingForBid(Player::Three), state.get_status());
     }
 
     #[test]
