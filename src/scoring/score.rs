@@ -1,6 +1,4 @@
 /// Represents a team's score.
-///
-/// TODO: implement add traits
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 pub struct Score {
     tens: i64,

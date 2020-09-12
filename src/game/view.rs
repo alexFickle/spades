@@ -17,7 +17,7 @@ pub struct View {
 
 impl View {
     /// Creates a new view from a player's perspective.
-    pub fn new(
+    pub(super) fn new(
         player: Player,
         public_state: &PublicState,
         hand: card::Set,
