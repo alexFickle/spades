@@ -19,6 +19,9 @@ pub struct PublicState {
     trump_broken: bool,
     /// The player that bid nil and is waiting for partner confirmation.
     pending_nil_player: Option<Player>,
+    /// If each player has had a nil rejected this turn, meaning that
+    /// they can not attempt to bid nil again this round.
+    nil_rejected: player::Array<bool>,
     /// Each player's bid.
     bids: player::Array<Option<Bid>>,
     /// The number of tricks each player has taken.
@@ -36,6 +39,7 @@ impl Default for PublicState {
             seen_cards: player::Array::from_value(&false),
             trump_broken: false,
             pending_nil_player: None,
+            nil_rejected: player::Array::default(),
             bids: player::Array::default(),
             tricks_taken: player::Array::from_value(&0),
             trick: Trick::new(Player::Two),
@@ -64,6 +68,12 @@ impl PublicState {
     /// This means that a trump card was played in a previous trick.
     pub fn is_trump_broken(&self) -> bool {
         self.trump_broken
+    }
+
+    /// Gets if a nil bid has been rejected this round,
+    /// which prevents the player from bidding nil again this round.
+    pub fn get_nil_rejected(&self, player: Player) -> bool {
+        self.nil_rejected[player]
     }
 
     /// Gets a player's bid, if it has been made.
@@ -144,6 +154,7 @@ impl PublicState {
                 self.dealer = self.dealer.next();
                 self.seen_cards.fill(&false);
                 self.trump_broken = false;
+                self.nil_rejected.fill(&false);
                 self.bids.fill(&None);
                 self.tricks_taken.fill(&0);
                 self.trick = Trick::new(self.dealer.next());
@@ -218,32 +229,18 @@ impl PublicState {
             return Err("Can not bid blind nil as you have seen your cards."
                 .to_string());
         }
-        if bid == Bid::BlindNil || bid == Bid::Nil {
-            if self.bids[player.teammate()] == Some(Bid::BlindNil)
-                || self.bids[player.teammate()] == Some(Bid::Nil)
-            {
-                return Err(
-                    "Both members of a team can not bid nil.".to_string()
-                );
-            }
-        }
-        if let Bid::Take(tricks_claimed) = bid {
-            let team_tricks_claimed = tricks_claimed
-                + if let Some(Bid::Take(count)) = self.bids[player.teammate()] {
-                    count
-                } else {
-                    0
-                };
-            if team_tricks_claimed > 13 {
-                return Err(format!(
-                    "Can not bid {} tricks, would cause your team total \
-                to be {}, which is greater than the max of 13.",
-                    tricks_claimed, team_tricks_claimed
-                ));
-            }
+        if let Some(bid_error) =
+            bid.get_compatibility_error(self.bids[player.teammate()])
+        {
+            return Err(bid_error.to_string());
         }
 
         if bid == Bid::Nil {
+            if self.nil_rejected[player] {
+                return Err("You can not bid nil if your partner has \
+                already rejected your nil bid this bidding round."
+                    .to_string());
+            }
             self.pending_nil_player = Some(player);
         } else {
             self.bids[player] = Some(bid);
@@ -267,6 +264,8 @@ impl PublicState {
             if bidding_nil.teammate() == player {
                 if is_approved {
                     self.bids[bidding_nil] = Some(Bid::Nil);
+                } else {
+                    self.nil_rejected[bidding_nil] = true;
                 }
                 self.pending_nil_player = None;
                 Ok(())
@@ -307,18 +306,6 @@ mod test {
 
         // player 2 bids nil
         state.on_cards_seen(Player::Two);
-        state.on_bid(Player::Two, Bid::Nil).unwrap();
-
-        // player 4 denies
-        assert_eq!(
-            state.get_status(),
-            Status::WaitingForNilConfirmation(Player::Four)
-        );
-        state.on_cards_seen(Player::Four);
-        state.on_nil_approval(Player::Four, false).unwrap();
-
-        // player 2 bids nil again
-        assert_eq!(state.get_status(), Status::WaitingForBid(Player::Two));
         state.on_bid(Player::Two, Bid::Nil).unwrap();
 
         // player 4 accepts it

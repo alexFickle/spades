@@ -107,6 +107,6 @@ impl State {
 
     /// Creates a player's view of the game.
     pub fn create_view(&self, player: Player) -> View {
-        View::new(player, &self.public_state, self.hands[player])
+        View::from_public_state(player, &self.public_state, self.hands[player])
     }
 }

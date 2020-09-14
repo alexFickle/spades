@@ -3,7 +3,7 @@
 mod score;
 pub use score::Score;
 
-mod bid;
+pub(crate) mod bid;
 pub use bid::Bid;
 
 mod team_round_result;

@@ -2,7 +2,7 @@ use crate::card::Card;
 use crate::Bid;
 
 /// Actions that a player can perform that changes a game's state.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Event {
     /// A player wishes to see their cards, forfeiting their right to bid
     /// blind nil if they have not already done so.
